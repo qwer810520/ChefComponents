@@ -8,14 +8,18 @@
 
 import Foundation
 
+enum DecodableError: Error {
+  case decodableFail
+}
+
 class Service {
 
   static let shared = Service()
 
   // MARK: - Public Methods
 
-  func fetchMask(completion: @escaping ([Pharmacy]? , Error?) -> Void) {
-    let maskUrlString = "https://raw.githubusercontent.com/"
+  func fetchMask(completion: @escaping ([Pharmacy]?, Error?) -> Void) {
+    let maskUrlString = "https://raw.githubusercontent.com/kiang/pharmacies/master/json/points.json"
     fetchGenericJSONData(urlString: maskUrlString, completion: completion)
   }
 
@@ -33,12 +37,29 @@ class Service {
       }
 
       do {
-        let objects = try JSONDecoder().decode(T.self, from: data!)
+        let objects = try data!.mapObject(T.self, keyPath: "features")
         completion(objects, nil)
       } catch {
         completion(nil, error)
         print("Failed to decode:", error.localizedDescription)
       }
     }.resume()
+  }
+}
+
+extension Data {
+  func mapObject<T: Decodable>(_ type: T.Type, keyPath: String? = nil) throws -> T {
+    let decodable = JSONDecoder()
+    guard let keyPath = keyPath else {
+      return try decodable.decode(T.self, from: self)
+    }
+
+    guard let jsonObject = try? JSONSerialization.jsonObject(with: self, options: .mutableContainers), let json = jsonObject as? [String: Any], let newValue = json[keyPath] else {
+      throw DecodableError.decodableFail
+    }
+
+    let data = try JSONSerialization.data(withJSONObject: newValue, options: .fragmentsAllowed)
+
+    return try decodable.decode(T.self, from: data)
   }
 }
